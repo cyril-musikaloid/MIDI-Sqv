@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+
+# Platformio
+*.pio
+c_cpp_properties.json
+extensions.json
+launch.json

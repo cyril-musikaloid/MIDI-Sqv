@@ -92,10 +92,11 @@ void handleNoteOff(byte inChannel, byte inNote, byte inVelocity)
 int pwmTab[] = {255, 255, 255, 0, 255,127,192,255,255};
 int i = 0;
 unsigned long refTime = 0;
+int currentCV;
 
 void setCV(int value)
 {
-
+    currentCV = value;
   myDac.analogWrite(false , false, true, true, value);
 }
 
@@ -104,33 +105,29 @@ void handlePWM()
 {
     unsigned long tmpTime = millis();
 
-    for (int i = 0; i< 4096; i++)
-    {
-        delay(1);
-        setCV(i);
-    }
+    long diff = refTime - tmpTime;
+
+    if (diff > 0 )
+        setCV(currentCV + diff);
+
+    if (currentCV >= 4095)
+        currentCV = 0;
+
+    refTime = tmpTime;   
 }
 
 ///
 void setup()
 {
-   // pinMode(sGatePin,     OUTPUT);
     pinMode(sAudioOutPin, OUTPUT);
-   // pinMode(sPWMPin, OUTPUT);
-   /* MIDI.setHandleNoteOn(handleNoteOn);
+    MIDI.setHandleNoteOn(handleNoteOn);
     MIDI.setHandleNoteOff(handleNoteOff);
-    MIDI.begin(3);*/
-   tone(sAudioOutPin, 440);
-    //analogWrite(sPWMPin, 255);
-    //pinMode(sPWMPin, OUTPUT);
-    //tone(sPWMPin, 1);
-    //pinMode(sAudioOutPin, OUTPUT);
+    MIDI.begin(3);
     myDac.begin();
-    //digitalWrite(sAudioOutPin, LOW);
 }
 
 void loop()
 {
-   // MIDI.read();
+   MIDI.read();
    handlePWM();
 }
