@@ -105,29 +105,33 @@ void handlePWM()
 {
     unsigned long tmpTime = millis();
 
-    long diff = refTime - tmpTime;
+    long diff = tmpTime - refTime;
 
-    if (diff > 0 )
-        setCV(currentCV + diff);
+    if ((diff) > 0 )
+    {
+        setCV(currentCV + (diff));
 
     if (currentCV >= 4095)
         currentCV = 0;
 
-    refTime = tmpTime;   
+    refTime = tmpTime;
+    }   
 }
 
 ///
 void setup()
 {
     pinMode(sAudioOutPin, OUTPUT);
-    MIDI.setHandleNoteOn(handleNoteOn);
-    MIDI.setHandleNoteOff(handleNoteOff);
-    MIDI.begin(3);
+    //MIDI.setHandleNoteOn(handleNoteOn);
+    //MIDI.setHandleNoteOff(handleNoteOff);
+    //MIDI.begin(3);
     myDac.begin();
+    //setCV(2500);
+    tone(sAudioOutPin, 440);
 }
 
 void loop()
 {
-   MIDI.read();
+   //MIDI.read();
    handlePWM();
 }
