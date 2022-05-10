@@ -108,7 +108,7 @@ void handlePWM()
     long potardValue = analogRead(sPotardPin);
 
     double factor = potardValue / 1024.0;
-    unsigned long step = ((micros() % ((unsigned long)(100000.0  * (1 + factor)))) * (0.0036 /* (1+factor)*/));
+    unsigned long step = ((micros() % ((unsigned long)(100000.0  /*(1 + factor)*/))) * (0.0036 /* (1+factor)*/));
 
     setCV(((cos(step) + 1.0) * 1000.0));
 }
