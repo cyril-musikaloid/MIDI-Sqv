@@ -23,6 +23,7 @@ MCP492X myDac(PIN_SPI_CHIP_SELECT_DAC);
 
 static const unsigned sAudioOutPin = 4;
 static const unsigned sMaxNumNotes = 16;
+static const unsigned sPotardPin = A3;
 MidiNoteList<sMaxNumNotes> midiNotes;
 
 // -----------------------------------------------------------------------------
@@ -100,34 +101,32 @@ void setCV(int value)
   myDac.analogWrite(false , false, true, true, value);
 }
 
+unsigned long period = 500;
 
 void handlePWM()
 {
-    unsigned long tmpTime = millis();
+    long potardValue = analogRead(sPotardPin);
 
-    long diff = refTime - tmpTime;
+    double factor = potardValue / 1024.0;
+    unsigned long step = ((micros() % ((unsigned long)(100000.0  * (1 + factor)))) * (0.0036 /* (1+factor)*/));
 
-    if (diff > 0 )
-        setCV(currentCV + diff);
-
-    if (currentCV >= 4095)
-        currentCV = 0;
-
-    refTime = tmpTime;   
+    setCV(((cos(step) + 1.0) * 1000.0));
 }
 
 ///
 void setup()
 {
     pinMode(sAudioOutPin, OUTPUT);
-    MIDI.setHandleNoteOn(handleNoteOn);
+    tone(sAudioOutPin, 1000);
+    /*MIDI.setHandleNoteOn(handleNoteOn);
     MIDI.setHandleNoteOff(handleNoteOff);
-    MIDI.begin(3);
+    MIDI.begin(3);*/
     myDac.begin();
 }
 
 void loop()
 {
-   MIDI.read();
+   //MIDI.read();
    handlePWM();
+   //delay(2);
 }
