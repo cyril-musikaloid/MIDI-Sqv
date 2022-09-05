@@ -47,7 +47,6 @@ void handleNotesChanged(bool isFirstNote = false)
     if (midiNotes.empty())
     {
         handleGateChanged(false);
-        //noTone(sAudioOutPin); // Remove to keep oscillator running during envelope release.
     }
     else
     {
@@ -59,7 +58,7 @@ void handleNotesChanged(bool isFirstNote = false)
         byte currentNote = 0;
         if (midiNotes.getLast(currentNote))
         {
-            tone(sAudioOutPin, sNotePitches[currentNote]);
+            //tone(sAudioOutPin, sNotePitches[currentNote]);
 
             if (isFirstNote)
             {
@@ -111,10 +110,14 @@ void handlePWM()
 ///
 void setup()
 {
+    MIDI.setHandleNoteOn(handleNoteOn);
+    MIDI.setHandleNoteOff(handleNoteOff);
+    MIDI.begin(3);
     myDac.begin();
 }
 
 void loop()
 {
-    
+    MIDI.read();
+
 }
