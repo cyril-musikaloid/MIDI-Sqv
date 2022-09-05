@@ -22,15 +22,19 @@ MIDI_CREATE_DEFAULT_INSTANCE();
 
 MCP492X myDac(PIN_SPI_CHIP_SELECT_DAC);
 
-static const unsigned sAudioOutPin = 4;
+static const unsigned sPitchClockOutPin = 4;
+static const unsigned sPitchClockInPin = 2;
 static const unsigned sMaxNumNotes = 16;
 MidiNoteList<sMaxNumNotes> midiNotes;
 
 // -----------------------------------------------------------------------------
 
+bool isGateActive = false;
+
 inline void handleGateChanged(bool inGateActive)
 {
    // digitalWrite(sGatePin, inGateActive ? HIGH : LOW);
+   isGateActive = inGateActive;
 }
 
 inline void pulseGate()
@@ -47,6 +51,7 @@ void handleNotesChanged(bool isFirstNote = false)
     if (midiNotes.empty())
     {
         handleGateChanged(false);
+        noTone(sPitchClockOutPin);
     }
     else
     {
@@ -58,7 +63,7 @@ void handleNotesChanged(bool isFirstNote = false)
         byte currentNote = 0;
         if (midiNotes.getLast(currentNote))
         {
-            //tone(sAudioOutPin, sNotePitches[currentNote]);
+            tone(sPitchClockOutPin, sNotePitches[currentNote]);
 
             if (isFirstNote)
             {
@@ -94,8 +99,6 @@ uint16_t decay = 512;
 uint16_t sustain = 512;
 uint16_t release = 512;
 
-uint64_t samplePeriod = 1000000/SAMPLE_RATE;
-
 void setCV(int value)
 {
     myDac.analogWrite(false , false, true, true, value);
@@ -107,6 +110,55 @@ void handlePWM()
 
 }
 
+bool attackDone = false;
+bool decayDone = false;
+
+const uint8_t sAttackPin = A0;
+const uint8_t sDecayPin = A1;
+const uint8_t sSustainPin = A2;
+const uint8_t sReleasePin = A3;
+
+uint16_t voltage = 0;
+
+void doAttack(uint16_t attack, uint16_t voltage, uint64_t time)
+{
+    
+}
+
+void audioClockHigh()
+{
+    if (isGateActive)
+    {
+        if (!attackDone)
+        {
+            //attack = analogRead(sAttackPin);
+            doAttack(attack, voltage, micros());
+        }
+        else if (!decayDone)
+        {
+            //sustain = analogRead(sSustainPin);
+            //decay = analogRead(sDecayPin);
+            doDecay(sustain, decay, voltage, micros());
+        }
+        else
+        {
+            //sustain = analogRead(sSustainPin);
+            doSustain(sustain, voltage);
+        }
+    }
+    else
+    {
+        //sustain = analogRead(sSustainPin);
+        //release  = analogRead(sReleasePin);
+        doRelease(sustain, release, voltage, micros());
+    }
+}
+
+void audioClockLow()
+{
+
+}
+
 ///
 void setup()
 {
@@ -114,6 +166,10 @@ void setup()
     MIDI.setHandleNoteOff(handleNoteOff);
     MIDI.begin(3);
     myDac.begin();
+    pinMode(sPitchClockOutPin, OUTPUT);
+    pinMode(sPitchClockInPin, INPUT);
+    attachInterrupt(digitalPinToInterrupt(sPitchClockInPin), audioClockHigh, RISING);
+    attachInterrupt(digitalPinToInterrupt(sPitchClockInPin), audioClockLow, FALLING);
 }
 
 void loop()
