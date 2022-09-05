@@ -18,7 +18,7 @@ MIDI_CREATE_DEFAULT_INSTANCE();
 // analog synth components (like envelopes).
 
 #define PIN_SPI_CHIP_SELECT_DAC 9
-#define SAMPLE_RATE 44100
+#define SAMPLE_RATE 25000
 
 MCP492X myDac(PIN_SPI_CHIP_SELECT_DAC);
 
