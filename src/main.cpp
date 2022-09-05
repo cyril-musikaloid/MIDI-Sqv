@@ -18,6 +18,7 @@ MIDI_CREATE_DEFAULT_INSTANCE();
 // analog synth components (like envelopes).
 
 #define PIN_SPI_CHIP_SELECT_DAC 9
+#define SAMPLE_RATE 44100
 
 MCP492X myDac(PIN_SPI_CHIP_SELECT_DAC);
 
@@ -89,49 +90,31 @@ void handleNoteOff(byte inChannel, byte inNote, byte inVelocity)
 
 // -----------------------------------------------------------------------------
 
-int pwmTab[] = {255, 255, 255, 0, 255,127,192,255,255};
-int i = 0;
-unsigned long refTime = 0;
-int currentCV;
+uint16_t attack = 512;
+uint16_t decay = 512;
+uint16_t sustain = 512;
+uint16_t release = 512;
+
+uint64_t samplePeriod = 1000000/SAMPLE_RATE;
 
 void setCV(int value)
 {
-    currentCV = value;
-  myDac.analogWrite(false , false, true, true, value);
+    myDac.analogWrite(false , false, true, true, value);
 }
 
 
 void handlePWM()
 {
-    unsigned long tmpTime = millis();
 
-    long diff = tmpTime - refTime;
-
-    if ((diff) > 0 )
-    {
-        setCV(currentCV + (diff));
-
-    if (currentCV >= 4095)
-        currentCV = 0;
-
-    refTime = tmpTime;
-    }   
 }
 
 ///
 void setup()
 {
-    pinMode(sAudioOutPin, OUTPUT);
-    //MIDI.setHandleNoteOn(handleNoteOn);
-    //MIDI.setHandleNoteOff(handleNoteOff);
-    //MIDI.begin(3);
     myDac.begin();
-    //setCV(2500);
-    tone(sAudioOutPin, 440);
 }
 
 void loop()
 {
-   //MIDI.read();
-   handlePWM();
+    
 }
