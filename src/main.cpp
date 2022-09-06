@@ -30,11 +30,14 @@ MidiNoteList<sMaxNumNotes> midiNotes;
 // -----------------------------------------------------------------------------
 
 bool isGateActive = false;
+bool attackDone = false;
+bool decayDone = false;
 
 inline void handleGateChanged(bool inGateActive)
 {
    // digitalWrite(sGatePin, inGateActive ? HIGH : LOW);
    isGateActive = inGateActive;
+   attackDone = decayDone = 0;
 }
 
 inline void pulseGate()
@@ -99,7 +102,7 @@ uint16_t decay = 512;
 uint16_t sustain = 512;
 uint16_t release = 512;
 
-void setCV(int value)
+void setCV(uint16_t value)
 {
     myDac.analogWrite(false , false, true, true, value);
 }
@@ -110,48 +113,92 @@ void handlePWM()
 
 }
 
-bool attackDone = false;
-bool decayDone = false;
-
 const uint8_t sAttackPin = A0;
 const uint8_t sDecayPin = A1;
 const uint8_t sSustainPin = A2;
 const uint8_t sReleasePin = A3;
 
-uint16_t voltage = 0;
+double voltage = 0.0;
 
-void doAttack(uint16_t attack, uint16_t voltage, uint64_t time)
+uint32_t tmpTime = 0;
+uint32_t newTime = 0;
+
+#define MAX_VOLTAGE 4095.0
+
+void doAttack(uint16_t attack, double* voltage, uint64_t time)
 {
+    attack += 1;
+    double factor = ( 4096.0 / ((double)attack * 4.0)) * ( (double)time / 1E6 );
+    *voltage += *voltage * factor;
+    if (*voltage >= MAX_VOLTAGE)
+    {
+        *voltage = MAX_VOLTAGE;
+        attackDone = true;
+    }
+}
+
+void doDecay(uint16_t sustain, uint16_t decay, double* voltage, uint64_t time)
+{
+    double sustainComputation = (double)sustain * 4 - 4096;
+    double decayComputation = 1024.0 - (double)decay;
+    double timeFactor = (double)time/1E6;
+
+    double factor = (sustainComputation / decayComputation) * timeFactor;
     
+    *voltage += MAX_VOLTAGE * factor;
+    if (*voltage <= (double)sustain * 4.0)
+    {
+        *voltage = (double)sustain * 4.0;
+        decayDone = true;
+    }
+}
+
+void doSustain(uint16_t sustain, double* voltage)
+{
+    *voltage = (double)sustain * 4.0;
+}
+
+void doRelease(uint16_t release, double* voltage, uint64_t time)
+{
+    double timeFactor = (double)time / 1E6;
+    double releaseComputation = (1024.0 - (double)release) * 4.0;
+    double factor = -(4096.0 / releaseComputation) * timeFactor;
+
+    *voltage += MAX_VOLTAGE * factor;
+    if (*voltage <= 0.0)
+        *voltage = 0.0;
 }
 
 void audioClockHigh()
 {
+    newTime = micros();
     if (isGateActive)
     {
         if (!attackDone)
         {
             //attack = analogRead(sAttackPin);
-            doAttack(attack, voltage, micros());
+            doAttack(attack, &voltage, newTime - tmpTime);
         }
         else if (!decayDone)
         {
             //sustain = analogRead(sSustainPin);
             //decay = analogRead(sDecayPin);
-            doDecay(sustain, decay, voltage, micros());
+            doDecay(sustain, decay, &voltage, newTime - tmpTime);
         }
         else
         {
             //sustain = analogRead(sSustainPin);
-            doSustain(sustain, voltage);
+            doSustain(sustain, &voltage);
         }
     }
     else
     {
         //sustain = analogRead(sSustainPin);
         //release  = analogRead(sReleasePin);
-        doRelease(sustain, release, voltage, micros());
+        doRelease(release, &voltage, newTime - tmpTime);
     }
+    setCV((uint16_t)voltage);
+    tmpTime = newTime;
 }
 
 void audioClockLow()
