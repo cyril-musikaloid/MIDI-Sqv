@@ -43,8 +43,9 @@ inline void handleGateChanged(bool inGateActive)
 {
    // digitalWrite(sGatePin, inGateActive ? HIGH : LOW);
    isGateActive = inGateActive;
+   //Serial.println(isGateActive);
    attackDone = decayDone = 0;
-   Serial.println("mdr");
+   //Serial.println("mdr");
 }
 
 inline void pulseGate()
@@ -60,9 +61,7 @@ void handleNotesChanged(bool isFirstNote = false)
 {
     if (midiNotes.empty())
     {
-       // Serial.println("false");
         handleGateChanged(false);
-        noTone(sPitchClockOutPin);
     }
     else
     {
@@ -74,12 +73,11 @@ void handleNotesChanged(bool isFirstNote = false)
         byte currentNote = 0;
         if (midiNotes.getLast(currentNote))
         {
-            tone(sPitchClockOutPin, sNotePitches[currentNote]);
+            tone(sPitchClockOutPin, sNotePitches[currentNote+1]);
 
             if (isFirstNote)
             {
                 handleGateChanged(true);
-                //Serial.println("true");
             }
             else
             {
@@ -106,10 +104,10 @@ void handleNoteOff(byte inChannel, byte inNote, byte inVelocity)
 
 // -----------------------------------------------------------------------------
 
-uint16_t attack = 512;
+uint16_t attack = 1;
 uint16_t decay = 512;
 uint16_t sustain = 512;
-uint16_t release = 512;
+uint16_t release = 150;
 
 void setCV(uint16_t value)
 {
@@ -127,18 +125,19 @@ const uint8_t sDecayPin = A1;
 const uint8_t sSustainPin = A2;
 const uint8_t sReleasePin = A3;
 
-double voltage = 0.0;
+double voltage = 1.0;
 
 uint32_t tmpTime = 0;
 uint32_t newTime = 0;
 
-#define MAX_VOLTAGE 4000.0
+#define MAX_VOLTAGE 4095.0
 
 void doAttack(uint16_t attack, double* voltage, uint64_t time)
 {
+    //Serial.println("A");
     attack += 1;
-    double factor = ( 4096.0 / ((double)attack * 4.0)) * ( (double)time / 1E6 );
-    *voltage += *voltage * factor;
+    double factor = ( MAX_VOLTAGE / ((double)attack * 4.0)) * ( (double)time / 1E6 );
+    *voltage += MAX_VOLTAGE * factor;
     if (*voltage >= MAX_VOLTAGE)
     {
         *voltage = MAX_VOLTAGE;
@@ -148,6 +147,7 @@ void doAttack(uint16_t attack, double* voltage, uint64_t time)
 
 void doDecay(uint16_t sustain, uint16_t decay, double* voltage, uint64_t time)
 {
+    //Serial.println("D");
     double sustainComputation = (double)sustain * 4 - 4096;
     double decayComputation = 1024.0 - (double)decay;
     double timeFactor = (double)time/1E6;
@@ -164,11 +164,13 @@ void doDecay(uint16_t sustain, uint16_t decay, double* voltage, uint64_t time)
 
 void doSustain(uint16_t sustain, double* voltage)
 {
+    //Serial.println("S");
     *voltage = (double)sustain * 4.0;
 }
 
 void doRelease(uint16_t release, double* voltage, uint64_t time)
 {
+    //Serial.println("R");
     double timeFactor = (double)time / 1E6;
     double releaseComputation = (1024.0 - (double)release) * 4.0;
     double factor = -(4096.0 / releaseComputation) * timeFactor;
@@ -181,9 +183,8 @@ void doRelease(uint16_t release, double* voltage, uint64_t time)
 void audioClockHigh()
 {
     newTime = micros();
-    if (isGateActive)
+    if (isGateActive == true)
     {
-        //Serial.println("Gate");
         if (!attackDone)
         {
             //attack = analogRead(sAttackPin);
@@ -201,9 +202,8 @@ void audioClockHigh()
             doSustain(sustain, &voltage);
         }
     }
-    else
+    else if (isGateActive == false)
     {
-        //Serial.println("NoGate");
         //sustain = analogRead(sSustainPin);
         //release  = analogRead(sReleasePin);
         attackDone = false;
@@ -214,14 +214,12 @@ void audioClockHigh()
     setCV((uint16_t)voltage);
     tmpTime = newTime;
     functionToCall = NONE;
-    //Serial.println(voltage);
 }
 
 void audioClockLow()
 {
     setCV(0);
     functionToCall = NONE;
-    //Serial.println("LOW");
 }
 
 void setAudioFunction()
@@ -241,22 +239,21 @@ void setup()
     pinMode(sPitchClockOutPin, OUTPUT);
     pinMode(sPitchClockInPin, INPUT);
     attachInterrupt(digitalPinToInterrupt(sPitchClockInPin), setAudioFunction, CHANGE);
-    Serial.begin(9600);
+   // Serial.begin(9600);
 }
 
-int theNote = 10;
+int theNote = 15;
 int nt = 0;
 int nt2 = 0;
 bool truc = false;
 void loop()
 {
-    nt2 = millis();
-    if (nt2 - nt >= 500 && truc == false)
+   /* nt2 = millis();
+    if (nt2 - nt >= 1500 && truc == false)
     {
         handleNoteOn(1, theNote, 100);
         truc = true,
         nt = nt2;
-        //Serial.println("play");
     }
     
     if (nt2 - nt >= 1000 && truc == true)
@@ -264,12 +261,13 @@ void loop()
         handleNoteOff(1, theNote, 100);
         truc = false;
         nt = nt2;
-        //Serial.println("fuck");
     }
 
     if (theNote == 40)
         theNote = 0;
+*/
 
+    MIDI.read();
     if (functionToCall == CLOCK_HIGH)
         audioClockHigh();
     else if (functionToCall == CLOCK_LOW)
