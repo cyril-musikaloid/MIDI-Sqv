@@ -1,24 +1,10 @@
-
-   
-   #include <Arduino.h>
+#include <Arduino.h>
 #include <MIDI.h>
 #include "noteList.h"
 #include "pitches.h"
 #include "MCP492X.h"
 
-MIDI_CREATE_DEFAULT_INSTANCE();
-
-#ifdef ARDUINO_SAM_DUE // Due has no tone function (yet), overriden to prevent build errors.
-#define tone(...)
-#define noTone(...)
-#endif
-
-// This example shows how to make a simple synth out of an Arduino, using the
-// tone() function. It also outputs a gate signal for controlling external
-// analog synth components (like envelopes).
-
 #define PIN_SPI_CHIP_SELECT_DAC 9
-#define SAMPLE_RATE 25000
 
 MCP492X myDac(PIN_SPI_CHIP_SELECT_DAC);
 
@@ -37,15 +23,19 @@ bool decayDone = false;
 #define CLOCK_HIGH  1
 #define CLOCK_LOW   2
 
+#define ATTACK_CC   20
+#define DECAY_CC    21
+#define SUSTAIN_CC  22
+#define RELEASE_CC  23
+
 volatile byte functionToCall = NONE;
+
+MIDI_CREATE_DEFAULT_INSTANCE();
 
 inline void handleGateChanged(bool inGateActive)
 {
-   // digitalWrite(sGatePin, inGateActive ? HIGH : LOW);
    isGateActive = inGateActive;
-   //Serial.println(isGateActive);
    attackDone = decayDone = 0;
-   //Serial.println("mdr");
 }
 
 inline void pulseGate()
@@ -73,7 +63,7 @@ void handleNotesChanged(bool isFirstNote = false)
         byte currentNote = 0;
         if (midiNotes.getLast(currentNote))
         {
-            tone(sPitchClockOutPin, sNotePitches[currentNote+1]);
+            tone(sPitchClockOutPin, sNotePitches[currentNote+1-24]);
 
             if (isFirstNote)
             {
@@ -114,12 +104,6 @@ void setCV(uint16_t value)
     myDac.analogWrite(false , false, true, true, value);
 }
 
-
-void handlePWM()
-{
-
-}
-
 const uint8_t sAttackPin = A0;
 const uint8_t sDecayPin = A1;
 const uint8_t sSustainPin = A2;
@@ -134,7 +118,6 @@ uint32_t newTime = 0;
 
 void doAttack(uint16_t attack, double* voltage, uint64_t time)
 {
-    //Serial.println("A");
     attack += 1;
     double factor = ( MAX_VOLTAGE / ((double)attack * 4.0)) * ( (double)time / 1E6 );
     *voltage += MAX_VOLTAGE * factor;
@@ -147,7 +130,6 @@ void doAttack(uint16_t attack, double* voltage, uint64_t time)
 
 void doDecay(uint16_t sustain, uint16_t decay, double* voltage, uint64_t time)
 {
-    //Serial.println("D");
     double sustainComputation = (double)sustain * 4 - 4096;
     double decayComputation = 1024.0 - (double)decay;
     double timeFactor = (double)time/1E6;
@@ -164,13 +146,11 @@ void doDecay(uint16_t sustain, uint16_t decay, double* voltage, uint64_t time)
 
 void doSustain(uint16_t sustain, double* voltage)
 {
-    //Serial.println("S");
     *voltage = (double)sustain * 4.0;
 }
 
 void doRelease(uint16_t release, double* voltage, uint64_t time)
 {
-    //Serial.println("R");
     double timeFactor = (double)time / 1E6;
     double releaseComputation = (1024.0 - (double)release) * 4.0;
     double factor = -(4096.0 / releaseComputation) * timeFactor;
@@ -186,31 +166,19 @@ void audioClockHigh()
     if (isGateActive == true)
     {
         if (!attackDone)
-        {
-            //attack = analogRead(sAttackPin);
             doAttack(attack, &voltage, newTime - tmpTime);
-        }
         else if (!decayDone)
-        {
-            //sustain = analogRead(sSustainPin);
             //decay = analogRead(sDecayPin);
             doDecay(sustain, decay, &voltage, newTime - tmpTime);
-        }
         else
-        {
-            //sustain = analogRead(sSustainPin);
             doSustain(sustain, &voltage);
-        }
     }
     else if (isGateActive == false)
     {
-        //sustain = analogRead(sSustainPin);
-        //release  = analogRead(sReleasePin);
         attackDone = false;
         decayDone = false;
         doRelease(release, &voltage, newTime - tmpTime);
     }
-    //voltage = 4000;
     setCV((uint16_t)voltage);
     tmpTime = newTime;
     functionToCall = NONE;
@@ -229,17 +197,44 @@ void setAudioFunction()
     else
         functionToCall = CLOCK_LOW;
 }
+
+void controlChange(byte channel, byte controlNumber, byte value)
+{
+    switch (controlNumber)
+    {
+        case ATTACK_CC:
+            attack = value * 8;
+            break;
+        case DECAY_CC:
+            decay = value * 8;
+            break;
+        case SUSTAIN_CC:
+            sustain = value * 8;
+            break;
+        case RELEASE_CC:
+            release = value * 8;
+            break;
+    }
+}
+
+void removeAllNote()
+{
+    MidiNoteList<sMaxNumNotes> newMidiNotes;
+    midiNotes = newMidiNotes;
+}
+
+
 ///
 void setup()
 {
     MIDI.setHandleNoteOn(handleNoteOn);
     MIDI.setHandleNoteOff(handleNoteOff);
+    MIDI.setHandleControlChange(controlChange);
     MIDI.begin(3);
     myDac.begin();
     pinMode(sPitchClockOutPin, OUTPUT);
     pinMode(sPitchClockInPin, INPUT);
     attachInterrupt(digitalPinToInterrupt(sPitchClockInPin), setAudioFunction, CHANGE);
-   // Serial.begin(9600);
 }
 
 int theNote = 15;
@@ -248,36 +243,9 @@ int nt2 = 0;
 bool truc = false;
 void loop()
 {
-   /* nt2 = millis();
-    if (nt2 - nt >= 1500 && truc == false)
-    {
-        handleNoteOn(1, theNote, 100);
-        truc = true,
-        nt = nt2;
-    }
-    
-    if (nt2 - nt >= 1000 && truc == true)
-    {
-        handleNoteOff(1, theNote, 100);
-        truc = false;
-        nt = nt2;
-    }
-
-    if (theNote == 40)
-        theNote = 0;
-*/
-
     MIDI.read();
     if (functionToCall == CLOCK_HIGH)
         audioClockHigh();
     else if (functionToCall == CLOCK_LOW)
         audioClockLow();
-
-    
-
-      /*  setCV(2048);
-        delay(2);
-        setCV(0);
-        delay(2);*/
-    //tone(sPitchClockOutPin, 550);
 }
