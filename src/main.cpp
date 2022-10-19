@@ -95,7 +95,7 @@ void handleNoteOff(byte inChannel, byte inNote, byte inVelocity)
 // -----------------------------------------------------------------------------
 
 uint16_t attack = 1;
-uint16_t decay = 512;
+uint16_t decay = 1;
 uint16_t sustain = 512;
 uint16_t release = 150;
 
@@ -130,13 +130,15 @@ void doAttack(uint16_t attack, double* voltage, uint64_t time)
 
 void doDecay(uint16_t sustain, uint16_t decay, double* voltage, uint64_t time)
 {
-    double sustainComputation = (double)sustain * 4 - 4096;
-    double decayComputation = 1024.0 - (double)decay;
+    decay += 1;
+    double sustainComputation = (double)sustain * 4.0 ;
+    double drop = MAX_VOLTAGE - sustainComputation;
+    double decayComputation = (((double)decay * 4.0) / MAX_VOLTAGE) * drop;
     double timeFactor = (double)time/1E6;
 
-    double factor = (sustainComputation / decayComputation) * timeFactor;
+    double factor = -(drop / decayComputation )* timeFactor;
     
-    *voltage += MAX_VOLTAGE * factor;
+    *voltage += drop * factor;
     if (*voltage <= (double)sustain * 4.0)
     {
         *voltage = (double)sustain * 4.0;
@@ -152,8 +154,8 @@ void doSustain(uint16_t sustain, double* voltage)
 void doRelease(uint16_t release, double* voltage, uint64_t time)
 {
     double timeFactor = (double)time / 1E6;
-    double releaseComputation = (1024.0 - (double)release) * 4.0;
-    double factor = -(4096.0 / releaseComputation) * timeFactor;
+    double releaseComputation = (double)release * 4.0;
+    double factor = -(MAX_VOLTAGE / releaseComputation) * timeFactor;
 
     *voltage += MAX_VOLTAGE * factor;
     if (*voltage <= 0.0)
@@ -168,7 +170,6 @@ void audioClockHigh()
         if (!attackDone)
             doAttack(attack, &voltage, newTime - tmpTime);
         else if (!decayDone)
-            //decay = analogRead(sDecayPin);
             doDecay(sustain, decay, &voltage, newTime - tmpTime);
         else
             doSustain(sustain, &voltage);
@@ -202,11 +203,11 @@ void controlChange(byte channel, byte controlNumber, byte value)
 {
     switch (controlNumber)
     {
-        case ATTACK_CC:
-            attack = value * 8;
-            break;
         case DECAY_CC:
             decay = value * 8;
+            break;
+        case ATTACK_CC:
+            attack = value * 8;
             break;
         case SUSTAIN_CC:
             sustain = value * 8;
